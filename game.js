@@ -17,6 +17,7 @@ const THEMES = {
       '#e57373', // Z - red
       '#90caf9', // J - pale blue
       '#ffb74d', // L - orange
+      '#f06292', // N - magenta
     ],
     gridColor: '#22222e',
     blockHighlight: 'rgba(255, 255, 255, 0.12)',
@@ -32,6 +33,7 @@ const THEMES = {
       '#d32f2f', // Z - red
       '#1565c0', // J - blue
       '#ef6c00', // L - orange
+      '#c2185b', // N - magenta
     ],
     gridColor: '#d5d5e2',
     blockHighlight: 'rgba(0, 0, 0, 0.18)',
@@ -52,6 +54,7 @@ const PIECES = [
   [[5,5,0],[0,5,5],[0,0,0]],                  // Z
   [[6,0,0],[6,6,6],[0,0,0]],                  // J
   [[0,0,7],[7,7,7],[0,0,0]],                  // L
+  [[8,8,8],[8,0,8],[8,8,8]],                  // N - nut (hueco central)
 ];
 
 const LINE_SCORES = [0, 100, 300, 500, 800];
@@ -76,7 +79,7 @@ function createBoard() {
 }
 
 function randomPiece() {
-  const type = Math.floor(Math.random() * 7) + 1;
+  const type = Math.floor(Math.random() * 8) + 1;
   const shape = PIECES[type].map(row => [...row]);
   return { type, shape, x: Math.floor(COLS / 2) - Math.floor(shape[0].length / 2), y: 0 };
 }

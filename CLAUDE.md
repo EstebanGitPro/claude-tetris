@@ -25,7 +25,7 @@ Four files, all top-level: `index.html` (DOM + two canvases), `style.css`, `game
 
 A cell value is simultaneously the piece type, the shape marker, and the color index. `PIECES[3]` (the T piece) is filled with literal `3`s, and `COLORS[3]` is the T color. `board[r][c]` stores that same number, `0` meaning empty. So `drawBlock` can early-return on falsy and `collide` can test truthiness without ever knowing which piece it is looking at.
 
-Consequence: **`PIECES`, `COLORS`, and the index used inside each shape matrix must stay aligned.** Adding a piece means appending to both arrays and filling the new matrix with the new index. Both arrays start with a `null` slot to keep indices 1–7.
+Consequence: **`PIECES`, `COLORS`, and the index used inside each shape matrix must stay aligned.** Adding a piece means appending to both arrays and filling the new matrix with the new index. Both arrays start with a `null` slot to keep indices 1–8.
 
 ### Rotation
 
