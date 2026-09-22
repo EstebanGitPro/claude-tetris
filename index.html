@@ -63,7 +63,48 @@
       <div class="overlay-box">
         <p id="overlay-title">GAME OVER</p>
         <p id="overlay-score"></p>
+        <div id="overlay-records" class="records-area hidden">
+          <form id="name-form" class="name-form hidden" autocomplete="off">
+            <label for="name-input" class="label">NUEVO TOP 5 — TU NOMBRE</label>
+            <div class="name-form-row">
+              <input type="text" id="name-input" maxlength="12" placeholder="Jugador" />
+              <button type="submit" class="records-btn">Guardar</button>
+            </div>
+          </form>
+          <p id="new-record-msg" class="new-record-msg hidden">¡Nuevo récord!</p>
+          <table class="records-table">
+            <thead>
+              <tr><th>#</th><th>Nombre</th><th>Puntos</th><th>Líneas</th><th>Nivel</th><th>Fecha</th></tr>
+            </thead>
+            <tbody id="overlay-records-body"></tbody>
+          </table>
+        </div>
         <button id="restart-btn">Reiniciar</button>
+      </div>
+    </div>
+
+    <div id="start-screen" class="overlay start-screen hidden">
+      <div class="overlay-box">
+        <p class="start-title">TETRIS</p>
+        <span class="label">MEJORES PUNTUACIONES</span>
+        <table class="records-table">
+          <thead>
+            <tr><th>#</th><th>Nombre</th><th>Puntos</th><th>Líneas</th><th>Nivel</th><th>Fecha</th></tr>
+          </thead>
+          <tbody id="start-records-body"></tbody>
+        </table>
+        <div class="records-stats">
+          <div class="panel-section">
+            <span class="label">MEJOR COMBO</span>
+            <span class="records-stat-value" id="best-combo">0</span>
+          </div>
+          <div class="panel-section">
+            <span class="label">MÁX. LÍNEAS</span>
+            <span class="records-stat-value" id="max-lines">0</span>
+          </div>
+        </div>
+        <button id="play-btn" class="records-btn records-btn-primary">Jugar</button>
+        <button id="reset-records-btn" class="records-btn records-btn-secondary">Resetear records</button>
       </div>
     </div>
 
