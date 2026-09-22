@@ -71,8 +71,51 @@ const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 const themeToggle = document.getElementById('theme-toggle');
+const pauseMenu = document.getElementById('pause-menu');
+const resumeBtn = document.getElementById('resume-btn');
+const pauseRestartBtn = document.getElementById('pause-restart-btn');
+const controlsToggleBtn = document.getElementById('controls-toggle-btn');
+const pauseControls = document.getElementById('pause-controls');
+const startLevelSelect = document.getElementById('start-level-select');
+const gameContainer = document.querySelector('.game-container');
+
+const START_LEVEL_STORAGE_KEY = 'tetris-start-level';
+const MIN_START_LEVEL = 1;
+const MAX_START_LEVEL = 10;
+// Game input is ignored for this long after resuming, so the key that closed
+// the menu (or a quick follow-up) cannot move or drop the piece.
+const RESUME_INPUT_LOCK_MS = 150;
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let startLevel = loadStartLevel();
+// Snapshot of startLevel for the game in progress; menu changes apply on the next init().
+let gameStartLevel = startLevel;
+let inputLockUntil = 0;
+
+function parseStartLevel(value) {
+  const n = Number(value);
+  return Number.isInteger(n) && n >= MIN_START_LEVEL && n <= MAX_START_LEVEL ? n : null;
+}
+
+function loadStartLevel() {
+  try {
+    return parseStartLevel(localStorage.getItem(START_LEVEL_STORAGE_KEY)) ?? MIN_START_LEVEL;
+  } catch {
+    return MIN_START_LEVEL;
+  }
+}
+
+function saveStartLevel(value) {
+  try {
+    localStorage.setItem(START_LEVEL_STORAGE_KEY, String(value));
+  } catch {
+    // Storage unavailable (private mode, blocked): keep the in-memory value.
+  }
+}
+
+function levelDropInterval(lvl) {
+  return Math.max(100, 1000 - (lvl - 1) * 90);
+}
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
@@ -138,8 +181,8 @@ function clearLines() {
   if (cleared) {
     lines += cleared;
     score += (LINE_SCORES[cleared] || 0) * level;
-    level = Math.floor(lines / 10) + 1;
-    dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+    level = Math.max(gameStartLevel, Math.floor(lines / 10) + 1);
+    dropInterval = levelDropInterval(level);
     updateHUD();
   }
 }
@@ -258,18 +301,41 @@ function endGame() {
   overlay.classList.remove('hidden');
 }
 
+// Drop focus from menu controls so a later Space/Enter cannot re-activate a
+// hidden button while the game is running.
+function blurPauseMenuFocus() {
+  if (pauseMenu.contains(document.activeElement)) document.activeElement.blur();
+}
+
+function openPauseMenu() {
+  if (gameOver || paused) return;
+  paused = true;
+  cancelAnimationFrame(animId);
+  startLevelSelect.value = String(startLevel);
+  pauseMenu.classList.remove('hidden');
+  // Keep keyboard focus inside the modal menu: board/panel controls go inert.
+  gameContainer.inert = true;
+  // Focus the dialog itself (not a button) so Tab enters the menu but a stray
+  // Space/Enter does not trigger anything.
+  pauseMenu.focus();
+}
+
+function closePauseMenu() {
+  if (!paused) return;
+  paused = false;
+  blurPauseMenuFocus();
+  pauseMenu.classList.add('hidden');
+  gameContainer.inert = false;
+  inputLockUntil = performance.now() + RESUME_INPUT_LOCK_MS;
+  lastTime = performance.now();
+  dropAccum = 0;
+  cancelAnimationFrame(animId);
+  animId = requestAnimationFrame(loop);
+}
+
 function togglePause() {
-  if (gameOver) return;
-  paused = !paused;
-  if (!paused) {
-    lastTime = performance.now();
-    loop(lastTime);
-  } else {
-    cancelAnimationFrame(animId);
-    overlayTitle.textContent = 'PAUSA';
-    overlayScore.textContent = '';
-    overlay.classList.remove('hidden');
-  }
+  if (paused) closePauseMenu();
+  else openPauseMenu();
 }
 
 function loop(ts) {
@@ -294,23 +360,46 @@ function init() {
   board = createBoard();
   score = 0;
   lines = 0;
-  level = 1;
+  gameStartLevel = startLevel;
+  level = gameStartLevel;
   paused = false;
   gameOver = false;
-  dropInterval = 1000;
+  dropInterval = levelDropInterval(level);
   dropAccum = 0;
   lastTime = performance.now();
+  inputLockUntil = 0;
   next = randomPiece();
   spawn();
   updateHUD();
   overlay.classList.add('hidden');
+  blurPauseMenuFocus();
+  pauseMenu.classList.add('hidden');
+  gameContainer.inert = false;
   cancelAnimationFrame(animId);
   animId = requestAnimationFrame(loop);
 }
 
+const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', 'KeyX', 'Space']);
+
 document.addEventListener('keydown', e => {
-  if (e.code === 'KeyP') { togglePause(); return; }
-  if (paused || gameOver) return;
+  // The weather modal owns the keyboard while it is open.
+  if (!weatherModal.classList.contains('hidden')) return;
+  if (e.code === 'KeyP' || e.code === 'Escape') {
+    e.preventDefault();
+    if (!e.repeat) togglePause();
+    return;
+  }
+  if (paused) {
+    // Menu open: only P/Escape reach the game. Let Tab/Enter/Space/arrows work
+    // natively on the focused menu control (button, select); elsewhere stop
+    // Space/arrows from scrolling the page.
+    const onMenuControl = e.target instanceof Element && e.target.matches('#pause-menu button, #pause-menu select');
+    if (!onMenuControl && GAME_KEYS.has(e.code)) e.preventDefault();
+    return;
+  }
+  if (gameOver) return;
+  if (GAME_KEYS.has(e.code)) e.preventDefault();
+  if (performance.now() < inputLockUntil) return;
   switch (e.code) {
     case 'ArrowLeft':
       if (!collide(current.shape, current.x - 1, current.y)) current.x--;
@@ -334,6 +423,32 @@ document.addEventListener('keydown', e => {
 });
 
 restartBtn.addEventListener('click', init);
+
+// Pause menu
+for (let lvl = MIN_START_LEVEL; lvl <= MAX_START_LEVEL; lvl++) {
+  const option = document.createElement('option');
+  option.value = String(lvl);
+  option.textContent = String(lvl);
+  startLevelSelect.appendChild(option);
+}
+startLevelSelect.value = String(startLevel);
+
+resumeBtn.addEventListener('click', closePauseMenu);
+pauseRestartBtn.addEventListener('click', init);
+
+controlsToggleBtn.addEventListener('click', () => {
+  const expanded = pauseControls.hidden;
+  pauseControls.hidden = !expanded;
+  controlsToggleBtn.setAttribute('aria-expanded', String(expanded));
+  controlsToggleBtn.textContent = expanded ? 'Ocultar controles' : 'Ver controles';
+});
+
+startLevelSelect.addEventListener('change', () => {
+  const value = parseStartLevel(startLevelSelect.value);
+  if (value === null) return;
+  startLevel = value;
+  saveStartLevel(value);
+});
 
 // Tema claro/oscuro
 function applyTheme(theme) {
