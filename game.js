@@ -178,6 +178,7 @@ function clearLines() {
       r++;
     }
   }
+  trackCombo(cleared);
   if (cleared) {
     lines += cleared;
     score += (LINE_SCORES[cleared] || 0) * level;
@@ -299,6 +300,7 @@ function endGame() {
   overlayTitle.textContent = 'GAME OVER';
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
   overlay.classList.remove('hidden');
+  showGameOverRecords(); // after unhiding the overlay so the name input can take focus
 }
 
 // Drop focus from menu controls so a later Space/Enter cannot re-activate a
@@ -368,6 +370,7 @@ function init() {
   dropAccum = 0;
   lastTime = performance.now();
   inputLockUntil = 0;
+  resetRecordsForNewGame();
   next = randomPiece();
   spawn();
   updateHUD();
@@ -384,6 +387,8 @@ const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowDown', 'ArrowUp', 'K
 document.addEventListener('keydown', e => {
   // The weather modal owns the keyboard while it is open.
   if (!weatherModal.classList.contains('hidden')) return;
+  // Start screen and name input own the keyboard too.
+  if (shouldIgnoreGameKeys(e)) return;
   if (e.code === 'KeyP' || e.code === 'Escape') {
     e.preventDefault();
     if (!e.repeat) togglePause();
@@ -507,4 +512,237 @@ async function fetchAndShowWeather() {
   }
 }
 
-init();
+// Records
+const RECORDS_STORAGE_KEY = 'tetris-records';
+const RECORDS_MAX = 5;
+const NAME_MAX_LENGTH = 12;
+const DEFAULT_PLAYER_NAME = 'Jugador';
+
+const startScreen = document.getElementById('start-screen');
+const startRecordsBody = document.getElementById('start-records-body');
+const bestComboEl = document.getElementById('best-combo');
+const maxLinesEl = document.getElementById('max-lines');
+const playBtn = document.getElementById('play-btn');
+const resetRecordsBtn = document.getElementById('reset-records-btn');
+const overlayRecords = document.getElementById('overlay-records');
+const overlayRecordsBody = document.getElementById('overlay-records-body');
+const nameForm = document.getElementById('name-form');
+const nameInput = document.getElementById('name-input');
+const newRecordMsg = document.getElementById('new-record-msg');
+
+let combo = 0;
+let maxComboThisGame = 0;
+let pendingRecord = null; // entry awaiting a name on the game-over overlay
+let resetArmTimer = null;
+
+function emptyRecords() {
+  return { top: [], bestCombo: 0, maxLines: 0 };
+}
+
+function toNonNegativeInt(value) {
+  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : null;
+}
+
+function sanitizeEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const score = toNonNegativeInt(entry.score);
+  const lines = toNonNegativeInt(entry.lines);
+  const level = toNonNegativeInt(entry.level);
+  if (typeof entry.name !== 'string' || score === null || lines === null || level === null) return null;
+  return {
+    name: entry.name.slice(0, NAME_MAX_LENGTH),
+    score,
+    lines,
+    level,
+    date: typeof entry.date === 'string' ? entry.date : '',
+  };
+}
+
+function loadRecords() {
+  try {
+    const raw = localStorage.getItem(RECORDS_STORAGE_KEY);
+    if (!raw) return emptyRecords();
+    const data = JSON.parse(raw);
+    if (!data || typeof data !== 'object') return emptyRecords();
+    const top = Array.isArray(data.top)
+      ? data.top.map(sanitizeEntry).filter(Boolean).sort((a, b) => b.score - a.score).slice(0, RECORDS_MAX)
+      : [];
+    return {
+      top,
+      bestCombo: toNonNegativeInt(data.bestCombo) ?? 0,
+      maxLines: toNonNegativeInt(data.maxLines) ?? 0,
+    };
+  } catch {
+    return emptyRecords();
+  }
+}
+
+function saveRecords(records) {
+  try {
+    localStorage.setItem(RECORDS_STORAGE_KEY, JSON.stringify(records));
+  } catch {
+    // Storage unavailable (private mode, quota): records just won't persist.
+  }
+}
+
+function qualifiesForTop(records, value) {
+  if (value <= 0) return false;
+  if (records.top.length < RECORDS_MAX) return true;
+  return value > records.top[records.top.length - 1].score;
+}
+
+function formatRecordDate(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('es', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+
+// User data is only ever written through textContent.
+function renderRecordsTable(tbody, top, highlightIndex) {
+  tbody.replaceChildren();
+  if (!top.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 6;
+    td.className = 'records-empty';
+    td.textContent = 'Sin records todavía';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+  top.forEach((entry, i) => {
+    const tr = document.createElement('tr');
+    if (i === highlightIndex) tr.className = 'records-highlight';
+    const cells = [
+      String(i + 1),
+      entry.name,
+      entry.score.toLocaleString(),
+      String(entry.lines),
+      String(entry.level),
+      formatRecordDate(entry.date),
+    ];
+    cells.forEach((text, col) => {
+      const td = document.createElement('td');
+      if (col === 1) td.className = 'records-name';
+      td.textContent = text;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+function renderStartScreen() {
+  const records = loadRecords();
+  renderRecordsTable(startRecordsBody, records.top, -1);
+  bestComboEl.textContent = records.bestCombo;
+  maxLinesEl.textContent = records.maxLines;
+}
+
+function showStartScreen() {
+  renderStartScreen();
+  startScreen.classList.remove('hidden');
+  playBtn.focus();
+}
+
+function isStartScreenVisible() {
+  return !startScreen.classList.contains('hidden');
+}
+
+function shouldIgnoreGameKeys(e) {
+  return isStartScreenVisible() || e.target === nameInput;
+}
+
+function trackCombo(cleared) {
+  combo = cleared > 0 ? combo + 1 : 0;
+  if (combo > maxComboThisGame) maxComboThisGame = combo;
+}
+
+function resetRecordsForNewGame() {
+  // Restarting without pressing "Guardar" must not lose a top-5 score.
+  if (pendingRecord) commitPendingRecord();
+  combo = 0;
+  maxComboThisGame = 0;
+  overlayRecords.classList.add('hidden');
+  nameForm.classList.add('hidden');
+  newRecordMsg.classList.add('hidden');
+}
+
+function showGameOverRecords() {
+  const records = loadRecords();
+  // Stats are updated on every game over, top-5 or not.
+  records.bestCombo = Math.max(records.bestCombo, maxComboThisGame);
+  records.maxLines = Math.max(records.maxLines, lines);
+  saveRecords(records);
+
+  if (qualifiesForTop(records, score)) {
+    pendingRecord = { score, lines, level, date: new Date().toISOString() };
+    nameInput.value = '';
+    nameForm.classList.remove('hidden');
+  }
+  renderRecordsTable(overlayRecordsBody, records.top, -1);
+  overlayRecords.classList.remove('hidden');
+  if (pendingRecord) nameInput.focus();
+}
+
+// Persists pendingRecord under the typed name (or the default) and returns
+// the updated top list plus the new entry's index (-1 if it fell out).
+function commitPendingRecord() {
+  const name = nameInput.value.trim().slice(0, NAME_MAX_LENGTH) || DEFAULT_PLAYER_NAME;
+  const entry = { name, ...pendingRecord };
+  pendingRecord = null;
+
+  const records = loadRecords();
+  records.top.push(entry);
+  records.top.sort((a, b) => b.score - a.score);
+  records.top = records.top.slice(0, RECORDS_MAX);
+  saveRecords(records);
+  return { top: records.top, index: records.top.indexOf(entry) };
+}
+
+function savePendingRecord() {
+  if (!pendingRecord) return;
+  const { top, index } = commitPendingRecord();
+
+  nameInput.blur();
+  nameForm.classList.add('hidden');
+  renderRecordsTable(overlayRecordsBody, top, index);
+  if (index !== -1) newRecordMsg.classList.remove('hidden');
+}
+
+function disarmResetButton() {
+  clearTimeout(resetArmTimer);
+  resetArmTimer = null;
+  resetRecordsBtn.classList.remove('armed');
+  resetRecordsBtn.textContent = 'Resetear records';
+}
+
+nameForm.addEventListener('submit', e => {
+  e.preventDefault();
+  savePendingRecord();
+});
+
+playBtn.addEventListener('click', () => {
+  disarmResetButton();
+  startScreen.classList.add('hidden');
+  playBtn.blur();
+  init();
+});
+
+// Two-step inline confirm instead of a blocking confirm() dialog.
+resetRecordsBtn.addEventListener('click', () => {
+  if (!resetRecordsBtn.classList.contains('armed')) {
+    resetRecordsBtn.classList.add('armed');
+    resetRecordsBtn.textContent = '¿Seguro? Clic de nuevo';
+    resetArmTimer = setTimeout(disarmResetButton, 3000);
+    return;
+  }
+  disarmResetButton();
+  try {
+    localStorage.removeItem(RECORDS_STORAGE_KEY);
+  } catch {
+    // Ignore: nothing to clear if storage is unavailable.
+  }
+  renderStartScreen();
+});
+
+showStartScreen();
