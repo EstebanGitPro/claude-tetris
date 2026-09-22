@@ -195,6 +195,34 @@ body {
   line-height: 1;
 }
 
+/* ---- Selector de skin ---- */
+.skin-select {
+  background: var(--color-kbd-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-board-border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* Skin board backgrounds override the theme's board color */
+:root[data-skin="neon"] #board,
+:root[data-skin="neon"] #next-canvas {
+  background: #000000;
+}
+
+:root[data-skin="pastel"] #board,
+:root[data-skin="pastel"] #next-canvas {
+  background: #fdf8f3;
+}
+
+:root[data-skin="pixel"] #board,
+:root[data-skin="pixel"] #next-canvas {
+  background: #0e0e1a;
+}
+
 /* ---- Controles ---- */
 .controls ul {
   list-style: none;
