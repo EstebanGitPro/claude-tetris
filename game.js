@@ -40,7 +40,48 @@ const THEMES = {
   },
 };
 
+// Skins change the block renderer and may override the theme palette/grid.
+// A null pieceColors/gridColor means "inherit from the active light/dark theme".
+const SKIN_STORAGE_KEY = 'tetris-skin';
+
+const SKINS = {
+  retro: { pieceColors: null, gridColor: null, drawCell: drawRetroCell },
+  neon: {
+    pieceColors: [
+      null,
+      '#00f0ff', // I
+      '#fff200', // O
+      '#bf00ff', // T
+      '#39ff14', // S
+      '#ff073a', // Z
+      '#1f51ff', // J
+      '#ff9900', // L
+      '#ff00e6', // N
+    ],
+    gridColor: '#101828',
+    drawCell: drawNeonCell,
+  },
+  pastel: {
+    pieceColors: [
+      null,
+      '#a8e6f0', // I
+      '#fff1a8', // O
+      '#d7b8f3', // T
+      '#b8e6c1', // S
+      '#f7b2b7', // Z
+      '#b3cdf5', // J
+      '#ffd1a3', // L
+      '#f8bbd9', // N
+    ],
+    gridColor: null,
+    drawCell: drawPastelCell,
+  },
+  pixel: { pieceColors: null, gridColor: null, drawCell: drawPixelCell },
+};
+
 let currentTheme = 'dark';
+let currentSkin = 'retro';
+let drawCell = drawRetroCell;
 let COLORS = THEMES.dark.pieceColors;
 let gridColor = THEMES.dark.gridColor;
 let blockHighlight = THEMES.dark.blockHighlight;
@@ -100,6 +141,7 @@ const resetRecordsBtn = document.getElementById('reset-records-btn');
 const RECORDS_STORAGE_KEY = 'tetris-records';
 const MAX_RECORDS = 5;
 
+const skinSelect = document.getElementById('skin-select');
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 // combo = consecutive locks that cleared at least one line; maxCombo is the best of this game
@@ -229,14 +271,72 @@ function updateHUD() {
 
 function drawBlock(context, x, y, colorIndex, size, alpha) {
   if (!colorIndex) return;
-  const color = COLORS[colorIndex];
+  context.save();
   context.globalAlpha = alpha ?? 1;
+  drawCell(context, x * size, y * size, size, COLORS[colorIndex]);
+  context.restore();
+}
+
+function drawRetroCell(context, px, py, size, color) {
   context.fillStyle = color;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  // highlight
+  context.fillRect(px + 1, py + 1, size - 2, size - 2);
   context.fillStyle = blockHighlight;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
-  context.globalAlpha = 1;
+  context.fillRect(px + 1, py + 1, size - 2, 4);
+}
+
+function drawNeonCell(context, px, py, size, color) {
+  context.shadowColor = color;
+  context.shadowBlur = size / 2;
+  context.strokeStyle = color;
+  context.lineWidth = 2;
+  context.strokeRect(px + 3, py + 3, size - 6, size - 6);
+  context.shadowBlur = size / 4;
+  context.globalAlpha *= 0.35;
+  context.fillStyle = color;
+  context.fillRect(px + 5, py + 5, size - 10, size - 10);
+}
+
+function roundedRectPath(context, x, y, w, h, r) {
+  context.beginPath();
+  context.moveTo(x + r, y);
+  context.arcTo(x + w, y, x + w, y + h, r);
+  context.arcTo(x + w, y + h, x, y + h, r);
+  context.arcTo(x, y + h, x, y, r);
+  context.arcTo(x, y, x + w, y, r);
+  context.closePath();
+}
+
+function drawPastelCell(context, px, py, size, color) {
+  const r = size / 4;
+  roundedRectPath(context, px + 2, py + 2, size - 4, size - 4, r);
+  context.fillStyle = color;
+  context.fill();
+  context.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+  context.lineWidth = 1.5;
+  context.stroke();
+  // soft shine in the top-left corner
+  context.fillStyle = 'rgba(255, 255, 255, 0.45)';
+  context.beginPath();
+  context.arc(px + size * 0.32, py + size * 0.32, size * 0.1, 0, Math.PI * 2);
+  context.fill();
+}
+
+function drawPixelCell(context, px, py, size, color) {
+  const n = 6;                 // texture is an n×n grid of "pixels"
+  const p = size / n;
+  context.fillStyle = color;
+  context.fillRect(px, py, size, size);
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      let shade = null;
+      if (i === 0 || j === 0) shade = 'rgba(255, 255, 255, 0.4)';          // lit edge
+      else if (i === n - 1 || j === n - 1) shade = 'rgba(0, 0, 0, 0.35)';  // shadow edge
+      else if ((i + j) % 2 === 0) shade = 'rgba(0, 0, 0, 0.1)';            // dither
+      if (!shade) continue;
+      context.fillStyle = shade;
+      context.fillRect(Math.floor(px + j * p), Math.floor(py + i * p), Math.ceil(p), Math.ceil(p));
+    }
+  }
 }
 
 function drawGrid() {
@@ -549,18 +649,42 @@ function showStartScreen() {
 // Tema claro/oscuro
 function applyTheme(theme) {
   currentTheme = theme;
-  const t = THEMES[theme];
-  COLORS = t.pieceColors;
-  gridColor = t.gridColor;
-  blockHighlight = t.blockHighlight;
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem(THEME_STORAGE_KEY, theme);
   themeToggle.checked = theme === 'light';
+  refreshPalette();
+}
+
+// Skin
+function applySkin(skin) {
+  currentSkin = skin;
+  drawCell = SKINS[skin].drawCell;
+  document.documentElement.setAttribute('data-skin', skin);
+  localStorage.setItem(SKIN_STORAGE_KEY, skin);
+  skinSelect.value = skin;
+  refreshPalette();
+}
+
+// Resolves the active colors from skin overrides falling back to the theme.
+function refreshPalette() {
+  const t = THEMES[currentTheme];
+  const s = SKINS[currentSkin];
+  COLORS = s.pieceColors || t.pieceColors;
+  gridColor = s.gridColor || t.gridColor;
+  blockHighlight = t.blockHighlight;
   if (board) {
     draw();
     drawNext();
   }
 }
+
+skinSelect.addEventListener('change', () => {
+  applySkin(skinSelect.value);
+  skinSelect.blur(); // keep arrow keys driving the game, not the select
+});
+
+const savedSkin = localStorage.getItem(SKIN_STORAGE_KEY);
+applySkin(Object.hasOwn(SKINS, savedSkin) ? savedSkin : 'retro');
 
 themeToggle.addEventListener('change', () => {
   applyTheme(themeToggle.checked ? 'light' : 'dark');
