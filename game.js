@@ -112,6 +112,7 @@ const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 const themeToggle = document.getElementById('theme-toggle');
+const skinSelect = document.getElementById('skin-select');
 const pauseMenu = document.getElementById('pause-menu');
 const pauseMain = document.getElementById('pause-main');
 const pauseControls = document.getElementById('pause-controls');
@@ -140,8 +141,6 @@ const resetRecordsBtn = document.getElementById('reset-records-btn');
 
 const RECORDS_STORAGE_KEY = 'tetris-records';
 const MAX_RECORDS = 5;
-
-const skinSelect = document.getElementById('skin-select');
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 // combo = consecutive locks that cleared at least one line; maxCombo is the best of this game
