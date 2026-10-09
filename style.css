@@ -276,6 +276,102 @@ kbd {
   background: var(--color-restart-hover);
 }
 
+/* ---- Menú de pausa ---- */
+.pause-title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  color: var(--color-value);
+}
+
+.pause-view {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
+  width: 200px;
+}
+
+.pause-view.hidden {
+  display: none;
+}
+
+.menu-btn {
+  background: var(--color-kbd-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-kbd-border);
+  border-radius: 6px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.menu-btn:hover,
+.menu-btn:focus-visible {
+  border-color: var(--color-restart-bg);
+  outline: none;
+}
+
+.menu-btn.primary {
+  background: var(--color-restart-bg);
+  color: var(--color-restart-text);
+  border-color: var(--color-restart-bg);
+}
+
+.menu-btn.primary:hover,
+.menu-btn.primary:focus-visible {
+  background: var(--color-restart-hover);
+}
+
+.start-level {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.start-level select {
+  background: var(--color-kbd-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-kbd-border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.pause-hint {
+  font-size: 11px;
+  color: var(--color-controls-text);
+  text-align: right;
+}
+
+.pause-controls-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.pause-controls-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: var(--color-controls-text);
+}
+
+.pause-controls-list li span {
+  display: flex;
+  gap: 4px;
+}
+
 /* ---- Botón Clima ---- */
 .weather-button {
   width: 100%;
